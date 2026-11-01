@@ -588,3 +588,26 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   (aws-lc assembles under zig cc), readelf max = GLIBC_2.28 each, x86_64 zig binary smoke-tested
   on :8423 (health ok). v0.1.1 tagged; v0.1.0 release+tag DELETED per user (broken linux assets;
   v0.1.1 is the only published release).
+- 2026-11-01 — FENCE FILENAMES + always-collapsible blocks (user request). Models emit
+  ```rust main.rs / ```rust:main.rs / ```Cargo.toml; react-markdown hides the info string —
+  parseFence(className, node.data.meta) reconstructs {lang, filename} (FILENAME_TOKEN, basename,
+  quotes stripped; bare name with known ext also sets lang). Header shows filename; download uses
+  it verbatim, filenameless blocks fall back to halotalk-<lang>.<ext> via LANG_EXT (rust→rs …).
+  Chevron now on EVERY block header (was STRUCT_LANGS≥14 only); defaults open, long struct
+  blocks still start collapsed post-stream (old test `halotalk-json.json` + aria-expanded
+  untouched). Mock: FILEBLOCK trigger emits all three conventions. New e2e asserts headers +
+  suggestedFilename() main.rs/Cargo.toml/dots.toml; full Playwright suite 15/15.
+- 2026-11-02 — TOKEN SPEEDS after runs (user request: prefill/decode tok/s + MTP accept from
+  llama.cpp /metrics). Backend: GET /api/providers/{id}/metrics (3 s timeout, bearer passthrough,
+  ALWAYS 200 {"metrics": text|null}; metrics_url strips trailing /v1; unit test metrics_url_tests).
+  Frontend: metrics.ts parses Prometheus text (old *_evaluations_* fallback names), computeSpeeds
+  diffs before/after, formatSpeeds "N tok/s prefill · N tok/s decode · N% draft accept" else
+  "N/A prefill · N/A decode"; render under assistant messages only after run. KEY FIX: hub closes
+  the idle-held events stream at run start and fast mock runs finish before EventSource reconnects,
+  so meta/done frames never reach the browser (proved: zero onMeta/onDone callbacks + curl SSE
+  trace, console probes) — snapshot taken client-side at SEND time (send/regenerate/edit/queue
+  flush), consumed by finishMetrics on EITHER onDone or the state-idle reload, done id resolved
+  from getChat last-assistant message. Speeds ephemeral (session state, keyed by message id); no
+  schema change. Mock: /metrics counters (prompt/predicted tokens+seconds, spec_decode 12/8 only
+  when request contains MTP → exact 66.7%). 3 new e2e (speeds, MTP accept, N/A unreachable);
+  full Playwright 18/18; cargo fmt/clippy/test workspace green (halo-server 18/18).

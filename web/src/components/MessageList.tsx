@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatSpeeds, type RunSpeeds } from "../metrics";
 import { rest } from "../rest";
 import type { Message } from "../types";
 import Markdown from "./Markdown";
@@ -99,6 +100,7 @@ function MessageRow({
   ttsReady,
   playing,
   delivered,
+  speed,
   onEdit,
   onActivate,
   onSpeak,
@@ -110,6 +112,7 @@ function MessageRow({
   ttsReady: boolean;
   playing: boolean;
   delivered?: boolean;
+  speed?: RunSpeeds | null;
   onEdit: (id: string, content: string) => void;
   onActivate: (id: string) => void;
   onSpeak: (id: string, text: string, isPlaying: boolean) => void;
@@ -215,6 +218,15 @@ function MessageRow({
                 {s.title}
               </span>
             ))}
+          </div>
+        )}
+        {!isUser && !streaming && speed !== undefined && (
+          <div
+            data-testid="token-speed"
+            title="Prefill/decode: llama.cpp /metrics counter deltas for this run. Draft accept: MTP/speculative tokens accepted (only when spec decoding is active)."
+            className="mt-1 text-[0.68rem] tabular-nums text-muted"
+          >
+            {formatSpeeds(speed)}
           </div>
         )}
         {!isUser && !streaming && ttsReady && m.content.trim() && (
@@ -333,6 +345,7 @@ type Props = {
   messages: Message[];
   streamingId: string | null;
   ttsReady: boolean;
+  speeds: Record<string, RunSpeeds | null>;
   pending: PendingItem[];
   delivered: Set<string>;
   onRetryPending: (id: string) => void;
@@ -346,6 +359,7 @@ export default function MessageList({
   messages,
   streamingId,
   ttsReady,
+  speeds,
   pending,
   delivered,
   onRetryPending,
@@ -448,6 +462,7 @@ export default function MessageList({
           ttsReady={ttsReady}
           playing={playingId === m.id}
           delivered={delivered.has(m.id)}
+          speed={speeds[m.id]}
           onEdit={onEditMessage}
           onActivate={onActivate}
           onSpeak={(id, text, isPlaying) => void speak(id, text, isPlaying)}

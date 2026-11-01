@@ -8,6 +8,8 @@ Families served under one server:
   Gemini          /gemini/v1beta/models[:generateContent|
                   :streamGenerateContent?alt=sse]   (+ /gemini/v1beta/models)
   Web search      /search   (POST {"query"} — HALO_WEB_SEARCH_URL target)
+  llama.cpp-style GET /metrics — Prometheus counters advance per completion;
+                  spec-decode (MTP) counters only tick when "MTP" is in the request.
 
 Behaviours: default greeting per family; image parts → "(saw an image)";
 web_search tool round when tools are advertised (then echo "(used web search: …)");
@@ -20,12 +22,49 @@ import json
 import os
 import re
 import struct
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DUMP_DIR = "/tmp/opencode"
 PORT = 9999
 HOST = os.environ.get("HALO_MOCK_HOST", "127.0.0.1")
+
+# llama.cpp-style Prometheus counters (see HaloTalk web/src/metrics.ts).
+METRICS = {
+    "llamacpp:prompt_tokens_total": 0.0,
+    "llamacpp:prompt_seconds_total": 0.0,
+    "llamacpp:tokens_predicted_total": 0.0,
+    "llamacpp:tokens_predicted_seconds_total": 0.0,
+    "llamacpp:n_decode_total": 0.0,
+    "llamacpp:spec_decode_num_drafts_total": 0.0,
+    "llamacpp:spec_decode_num_draft_tokens_total": 0.0,
+    "llamacpp:spec_decode_num_accepted_tokens_total": 0.0,
+}
+METRICS_LOCK = threading.Lock()
+
+
+def count_completion(req, text, seconds):
+    prompt_tokens = max(1, len(json.dumps(req)) // 4)
+    gen_tokens = max(1, len(text) // 4)
+    with METRICS_LOCK:
+        METRICS["llamacpp:prompt_tokens_total"] += prompt_tokens
+        METRICS["llamacpp:prompt_seconds_total"] += 0.05
+        METRICS["llamacpp:tokens_predicted_total"] += gen_tokens
+        METRICS["llamacpp:tokens_predicted_seconds_total"] += max(0.1, seconds - 0.05)
+        METRICS["llamacpp:n_decode_total"] += gen_tokens
+        if "MTP" in json.dumps(req).upper():
+            METRICS["llamacpp:spec_decode_num_drafts_total"] += 4
+            METRICS["llamacpp:spec_decode_num_draft_tokens_total"] += 12
+            METRICS["llamacpp:spec_decode_num_accepted_tokens_total"] += 8
+
+
+def render_metrics():
+    with METRICS_LOCK:
+        return (
+            "".join(f"# TYPE {k} counter\n{k} {v:.3f}\n" for k, v in METRICS.items())
+            + "# TYPE llamacpp:requests_processing gauge\nllamacpp:requests_processing 0\n"
+        )
 
 
 def dump(name, obj):
@@ -98,6 +137,12 @@ def openai_reply_body(req, greeting="Hello from mock!"):
     lu = last_user_text(messages)
     if any(has_image_parts(m.get("content")) for m in messages if m.get("role") == "user"):
         return f"{greeting} (saw an image)"
+    if "FILEBLOCK" in lu.upper():
+        return (
+            "Source:\n\n```rust main.rs\nfn main() {\n    println!(\"hi\");\n}\n```\n\n"
+            "Manifest:\n\n```Cargo.toml\n[package]\nname = \"demo\"\nversion = \"0.1.0\"\n```\n\n"
+            "Config:\n\n```toml:dots.toml\nx = 1\n```\n\nDone."
+        )
     if "JSONBLOCK" in lu.upper():
         rows = ",\n".join(
             f'    {{"id": {i}, "name": "item-{i}", "active": {str(i % 3 != 0).lower()}}}'
@@ -144,10 +189,12 @@ def sse_chunk(handler, delta, finish=None):
 
 
 def stream_openai(handler, req):
+    t0 = time.monotonic()
     handler.send_response(200)
     handler.send_header("Content-Type", "text/event-stream")
     handler.end_headers()
     slow = "SLOW" in json.dumps(req).upper()
+    reply = ""
     try:
         if wants_tool_call(req):
             q = tool_query(req)
@@ -168,6 +215,7 @@ def stream_openai(handler, req):
             sse_chunk(handler, {}, finish="stop")
         handler.wfile.write(b"data: [DONE]\n\n")
         handler.wfile.flush()
+        count_completion(req, reply, time.monotonic() - t0)
     except BrokenPipeError:
         pass
 
@@ -365,6 +413,14 @@ class H(BaseHTTPRequestHandler):
             self.json({"data": [{"id": "mock-claude", "type": "model"}]})
         elif p == "/gemini/v1beta/models":
             self.json({"models": [{"name": "models/mock-gemini", "displayName": "Mock Gemini"}]})
+        elif p == "/metrics":
+            raw = render_metrics().encode()
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
         else:
             self.json({"error": "not found"}, 404)
 
@@ -391,10 +447,12 @@ class H(BaseHTTPRequestHandler):
             dump("last_req.json", req)
             if req.get("stream"):
                 return stream_openai(self, req)
+            t0 = time.monotonic()
             if is_title_request(json.dumps(req)) and not req.get("tools"):
                 content = title_reply(req.get("messages", []))
             else:
                 content = openai_reply_body(req)
+            count_completion(req, content, time.monotonic() - t0)
             return self.json({"choices": [{"message": {"role": "assistant", "content": content}}]})
         if p == "/v1/embeddings":
             dump("last_embed.json", req)

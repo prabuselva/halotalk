@@ -12,13 +12,21 @@
 - [x] Send-status ticks (WhatsApp-style): local pending rows (clock → sending → sent → delivered
       double-tick, failed + retry) kept in `pending` state outside `messages`, reconciled against
       the hub transcript on every snapshot (echo, resync, state-idle reload, mid-run replay).
-- [x] Long structured code blocks (json/html/yaml/… ≥15 lines, `STRUCT_LANGS` in Markdown.tsx)
-      collapse after streaming (chevron + line count, first-line preview) with per-block
-      download-as-file button.
+- [x] Code blocks collapsible (always-visible chevron in header; default open, long structured
+      blocks (json/html/yaml/…, `STRUCT_LANGS` in Markdown.tsx ≥15 lines) start collapsed after
+      streaming (line count + first-line preview); per-block copy + download-as-file.
+- [x] `parseFence` reads the fence info string (+ react-markdown `node.data.meta`) for filenames in
+      the `rust main.rs` / `rust:main.rs` / bare `Cargo.toml` conventions → header label and the
+      exact download filename; filenameless blocks download `halotalk-<lang>.<ext>` (`LANG_EXT`).
 - [x] Responsive reading column (max-w-3xl → xl:4xl → 2xl:5xl) + textarea auto-grow scaled to
       viewport (35% of innerHeight, 140–420px, `max-h-[40vh]`).
 - [x] App version badge from `/api/health` (`data-testid="app-version"`) on the AuthGate logo card
       (works pre-login) and the sidebar user footer; empty on fetch failure (no broken layout).
+- [x] Token speeds after each run (`data-testid="token-speed"` under the answer): prefill/decode tok/s
+      + MTP/spec-decode draft-accept % from llama.cpp `/metrics` counter deltas (`GET
+      /api/providers/{id}/metrics` proxy, always 200 with `null` on upstream failure). Snapshot at
+      send/regenerate/edit/queue-flush; consumed on `done` OR the state-idle reload (fast runs miss
+      SSE frames); session-scoped, N/A when the provider exposes no metrics.
 
 ## 3.2 Capabilities
 - [x] Tool/function calling pass-through + built-in web search tool (opt-in per chat

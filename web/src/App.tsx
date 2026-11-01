@@ -21,6 +21,7 @@ import SettingsDrawer, {
 } from "./components/SettingsDrawer";
 import Sidebar from "./components/Sidebar";
 import { exportChatJson, exportChatMarkdown } from "./export";
+import { computeSpeeds, parsePrometheus, type RunSpeeds } from "./metrics";
 import { rest } from "./rest";
 import type {
   AuthStatus,
@@ -49,6 +50,43 @@ export default function App() {
     firstAt: 0,
     chars: 0,
   });
+  const [speeds, setSpeeds] = useState<Record<string, RunSpeeds | null>>({});
+  const metricsBefore = useRef<Record<string, Promise<Map<string, number> | null>>>({});
+  const activeChatRef = useRef<Chat | null>(null);
+  activeChatRef.current = activeChat;
+  const takeMetrics = useCallback((chatId: string, providerId?: string | null) => {
+    const pid = providerId ?? activeChatRef.current?.provider_id ?? "";
+    metricsBefore.current[chatId] = pid
+      ? rest
+          .providerMetrics(pid)
+          .then((t) => (t ? parsePrometheus(t) : null))
+          .catch(() => null)
+      : Promise.resolve(null);
+  }, []);
+
+  const finishMetrics = useCallback((chatId: string) => {
+    const pending = metricsBefore.current[chatId];
+    if (!pending) return;
+    delete metricsBefore.current[chatId];
+    const liveId = streamingIdRef.current;
+    const pid = activeChatRef.current?.provider_id ?? "";
+    void (async () => {
+      const before = await pending;
+      const after = pid
+        ? await rest
+            .providerMetrics(pid)
+            .then((t) => (t ? parsePrometheus(t) : null))
+            .catch(() => null)
+        : null;
+      const latest = await rest
+        .getChat(chatId)
+        .then((c) => c.messages)
+        .catch(() => null);
+      const lastAssistant = latest?.filter((m) => m.role === "assistant").pop();
+      const doneId = liveId ?? lastAssistant?.id ?? null;
+      if (doneId) setSpeeds((s) => ({ ...s, [doneId]: computeSpeeds(before, after) }));
+    })();
+  }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
@@ -362,6 +400,7 @@ export default function App() {
   }, []);
   const setStreaming = useCallback((id: string | null) => {
     streamingIdRef.current = id;
+
     setStreamingId(id);
   }, []);
 
@@ -387,6 +426,7 @@ export default function App() {
       return;
     }
     let chatId = activeId;
+    let providerId = activeChat?.provider_id ?? null;
     if (!chatId) {
       try {
         const pendingDraft = takePendingDraft();
@@ -394,6 +434,7 @@ export default function App() {
         const created = await rest.createChat(pendingDraft ? draftToPatch(pendingDraft) : {});
         setActiveId(created.id);
         setActiveChat(created);
+        providerId = created.provider_id;
         chatId = created.id;
       } catch (e) {
         showToast((e as Error).message);
@@ -406,6 +447,7 @@ export default function App() {
       [chatId]: [...(ps[chatId] ?? []), { id: lid, content, images, status: "sending" }],
     }));
     startPerf();
+    takeMetrics(chatId, providerId);
     try {
       await sendMessage(chatId, content, images);
       markPending(chatId, lid, "sent");
@@ -432,6 +474,7 @@ export default function App() {
     if (streamingId || !activeId) return;
     startPerf();
     try {
+      takeMetrics(activeId);
       await regenerateChat(activeId);
     } catch (e) {
       showToast((e as Error).message);
@@ -482,6 +525,7 @@ export default function App() {
     return subscribeChatEvents(chatId, {
       onState: (s) => {
         if (!s.streaming || !s.message_id) {
+          finishMetrics(chatId);
           setStreaming(null);
           // Hub closed an idle-held stream at run start (or the run finished
           // during the EventSource retry gap) — pull the transcript so frames
@@ -627,6 +671,7 @@ export default function App() {
         }
       },
       onDone: () => {
+        finishMetrics(chatId);
         setStreaming(null);
         window.setTimeout(() => setPerfBadge(null), 2500);
         refreshChats();
@@ -642,6 +687,7 @@ export default function App() {
     refreshChats,
     reloadMessages,
     setStreaming,
+    finishMetrics,
   ]);
 
   /// Flush the per-chat message queue whenever the chat goes idle.
@@ -653,6 +699,7 @@ export default function App() {
     setQueues((prev) => ({ ...prev, [activeId]: rest }));
     markPending(activeId, head.pendingId, "sending");
     startPerf();
+    takeMetrics(activeId);
     sendMessage(activeId, head.content, head.images)
       .then(() => markPending(activeId, head.pendingId, "sent"))
       .catch((e) => {
@@ -684,6 +731,7 @@ export default function App() {
   const editMessage = async (mid: string, content: string) => {
     if (streamingId || !activeId) return;
     startPerf();
+    takeMetrics(activeId);
     try {
       await editUserMessage(activeId, mid, content);
     } catch (e) {
@@ -889,6 +937,7 @@ export default function App() {
             messages={messages}
             streamingId={streamingId}
             ttsReady={voice.tts}
+            speeds={speeds}
             pending={activeId ? (pending[activeId] ?? []) : []}
             delivered={delivered}
             onRetryPending={retryPending}

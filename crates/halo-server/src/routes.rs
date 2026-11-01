@@ -49,6 +49,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/providers/{id}/models", get(list_models))
         .route("/api/providers/{id}/test", post(test_provider))
+        .route("/api/providers/{id}/metrics", get(provider_metrics))
         .route("/api/chats", get(list_chats).post(create_chat))
         .route(
             "/api/chats/{id}",
@@ -1325,6 +1326,44 @@ async fn test_provider(
     }))
 }
 
+/// llama.cpp-style Prometheus counters live at `<host>/metrics`, not under the
+/// API prefix; strip a trailing `/v1` from the configured base URL.
+fn metrics_url(base_url: &str) -> String {
+    let base = base_url.trim().trim_end_matches('/');
+    let base = base
+        .strip_suffix("/v1")
+        .unwrap_or(base)
+        .trim_end_matches('/');
+    format!("{base}/metrics")
+}
+
+/// llama.cpp `/metrics` passthrough (prefill/decode + spec-decode counters).
+/// Unreachable or non-200 upstream is data, not an error: `{"metrics": null}`.
+async fn provider_metrics(
+    State(state): State<AppState>,
+    Authed(user): Authed,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let provider = state
+        .store
+        .get_provider(&user.id, &id)
+        .await?
+        .ok_or_else(|| ApiError::not_found("provider not found"))?;
+    let mut rb = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(ApiError::internal)?
+        .get(metrics_url(&provider.base_url));
+    if !provider.api_key.is_empty() {
+        rb = rb.bearer_auth(&provider.api_key);
+    }
+    let metrics = match rb.send().await {
+        Ok(res) if res.status().is_success() => res.text().await.ok(),
+        _ => None,
+    };
+    Ok(Json(json!({ "metrics": metrics })))
+}
+
 type ModelCaps = Option<(bool, bool, Option<i64>)>;
 
 type DetectedModel = (Value, ModelCaps);
@@ -2398,5 +2437,23 @@ mod rate_tests {
         assert!(!lim.allow(ip));
         // other IPs are unaffected
         assert!(lim.allow(IpAddr::V4(Ipv4Addr::LOCALHOST)));
+    }
+}
+
+#[cfg(test)]
+mod metrics_url_tests {
+    use super::metrics_url;
+
+    #[test]
+    fn strips_api_prefix_to_reach_root_metrics() {
+        assert_eq!(metrics_url("http://h:8080/v1/"), "http://h:8080/metrics");
+        assert_eq!(metrics_url("http://h:8080/v1"), "http://h:8080/metrics");
+        assert_eq!(metrics_url("http://h:8080"), "http://h:8080/metrics");
+        assert_eq!(
+            metrics_url("https://host/path/"),
+            "https://host/path/metrics"
+        );
+        // "/v10" is not an API prefix and stays put
+        assert_eq!(metrics_url("http://h/v10"), "http://h/v10/metrics");
     }
 }

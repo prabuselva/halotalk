@@ -80,6 +80,8 @@ export const rest = {
     req<{ models: ModelInfo[] }>(`/api/providers/${providerId}/models`).then((r) => r.models),
   testProvider: (id: string) =>
     post<ProviderTestResult>(`/api/providers/${id}/test`, {}),
+  providerMetrics: (id: string) =>
+    req<{ metrics: string | null }>(`/api/providers/${id}/metrics`).then((r) => r.metrics),
 
   listKb: () => req<{ documents: KbDocEntry[] }>("/api/kb").then((r) => r.documents),
   addKb: (source: string, text: string) =>

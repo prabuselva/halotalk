@@ -262,3 +262,119 @@ test("large json code block collapses after streaming and downloads", async ({ p
   expect((await download).suggestedFilename()).toBe("halotalk-json.json");
   await page.request.delete(`/api/chats/${chat.id}`);
 });
+
+// --- helper: open (or create) a chat on provider[0] and return the composer
+async function openChatOnMock(page: import("@playwright/test").Page, title: string) {
+  const { providers } = (await (await page.request.get("/api/providers")).json()) as {
+    providers: { id: string }[];
+  };
+  const chat = (
+    await (
+      await page.request.post("/api/chats", {
+        data: { title, provider_id: providers[0].id, model: "mock-gpt" },
+      })
+    ).json()
+  ) as { id: string };
+  const scroller = page.getByTestId("message-scroll");
+  const composer = page.locator("textarea");
+  return { chat, scroller, composer };
+}
+
+test("token speeds from llama.cpp /metrics counters show after runs", async ({ page }) => {
+  await login(page);
+  const { chat, scroller, composer } = await openChatOnMock(page, `pw-speed-${Date.now()}`);
+  await page.reload();
+  await page.locator(`nav div[title="${chat.title}"]`).click();
+  await expect(page.getByRole("heading", { name: chat.title })).toBeVisible();
+
+  await composer.fill("plain run, nothing special");
+  await composer.press("Enter");
+  await expect(scroller.getByText("Hello from mock!")).toBeVisible({ timeout: 60_000 });
+  const speed = scroller.getByTestId("token-speed");
+  await expect(speed).toHaveText(/[0-9.]+ tok\/s prefill \u00b7 [0-9.]+ tok\/s decode/, {
+    timeout: 10_000,
+  });
+  await expect(speed).not.toContainText("accept");
+  await page.request.delete(`/api/chats/${chat.id}`);
+});
+
+test("MTP draft accept rate appears when spec-decode counters advance", async ({ page }) => {
+  await login(page);
+  const { chat, scroller, composer } = await openChatOnMock(page, `pw-mtp-${Date.now()}`);
+  await page.reload();
+  await page.locator(`nav div[title="${chat.title}"]`).click();
+  await expect(page.getByRole("heading", { name: chat.title })).toBeVisible();
+
+  await composer.fill("please use MTP speculative decoding");
+  await composer.press("Enter");
+  await expect(scroller.getByText("Hello from mock!")).toBeVisible({ timeout: 60_000 });
+  const speed = scroller.getByTestId("token-speed");
+  await expect(speed).toHaveText(/66\.7% draft accept/, { timeout: 10_000 });
+  await page.request.delete(`/api/chats/${chat.id}`);
+});
+
+test("token speeds show N/A when the provider has no metrics endpoint", async ({ page }) => {
+  await login(page);
+  const prov = (
+    await (
+      await page.request.post("/api/providers", {
+        data: { name: `pw-nometrics-${Date.now()}`, base_url: "http://127.0.0.1:9/v1", kind: "openai", api_key: "x" },
+      })
+    ).json()
+  ) as { id: string };
+  const chat = (
+    await (
+      await page.request.post("/api/chats", {
+        data: { title: `pw-dead-${Date.now()}`, provider_id: prov.id, model: "mock-gpt" },
+      })
+    ).json()
+  ) as { id: string };
+  await page.reload();
+  await page.locator(`nav div[title="${chat.title}"]`).click();
+  await expect(page.getByRole("heading", { name: chat.title })).toBeVisible();
+  const scroller = page.getByTestId("message-scroll");
+  const composer = page.locator("textarea");
+  await composer.fill("metrics-less provider");
+  await composer.press("Enter");
+  await expect(scroller.getByTestId("token-speed")).toHaveText("N/A prefill · N/A decode", {
+    timeout: 60_000,
+  });
+  await page.request.delete(`/api/chats/${chat.id}`);
+  await page.request.delete(`/api/providers/${prov.id}`);
+});
+
+test("fence filenames from the model drive header + download name", async ({ page }) => {
+  await login(page);
+  const { providers } = (await (await page.request.get("/api/providers")).json()) as {
+    providers: { id: string }[];
+  };
+  const title = `pw-fileblock-${Date.now()}`;
+  const chat = (
+    await (
+      await page.request.post("/api/chats", {
+        data: { title, provider_id: providers[0].id, model: "mock-gpt" },
+      })
+    ).json()
+  ) as { id: string };
+
+  await page.reload();
+  await page.locator(`nav div[title="${title}"]`).click();
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  const scroller = page.getByTestId("message-scroll");
+  const composer = page.locator("textarea");
+  await composer.fill("emit the FILEBLOCK files please");
+  await composer.press("Enter");
+  await expect(scroller.getByText("Done.")).toBeVisible({ timeout: 60_000 });
+
+  const heads = scroller.locator(".codeblock-head");
+  await expect(heads.nth(0)).toContainText("main.rs");
+  await expect(heads.nth(1)).toContainText("Cargo.toml");
+  await expect(heads.nth(2)).toContainText("dots.toml");
+
+  for (const [i, name] of [0, 1, 2].map((i, n) => [i, ["main.rs", "Cargo.toml", "dots.toml"][n]])) {
+    const dl = page.waitForEvent("download");
+    await scroller.getByTestId("code-download").nth(i).click();
+    expect((await dl).suggestedFilename()).toBe(name);
+  }
+  await page.request.delete(`/api/chats/${chat.id}`);
+});

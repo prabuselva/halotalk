@@ -55,6 +55,7 @@ Settings travel with each chat (`chats` row) so per-chat model config "just work
 | PATCH/DELETE | /api/providers/{id} | update (api_key optional) / remove |
 | GET | /api/providers/{id}/models | proxy upstream `GET /v1/models` (advertised caps seeded into registry once per model; manual edits win) |
 | POST | /api/providers/{id}/test | connectivity check → `{ok, models, ms}` or `{ok:false, error, ms}` |
+| GET | /api/providers/{id}/metrics | raw llama.cpp Prometheus text (`{ "metrics": text\|null }`, always 200; upstream failure → null) |
 | GET/POST | /api/prompts | per-user prompt library list / create `{title, body}` |
 | PATCH/DELETE | /api/prompts/{id} | rename/edit body / delete |
 | GET/POST | /api/presets | named chat-param sets list / create `{name, params}` (params allowlist) |

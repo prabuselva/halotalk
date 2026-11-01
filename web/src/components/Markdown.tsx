@@ -24,7 +24,55 @@ const STRUCT_LANGS = new Set([
 ]);
 const COLLAPSE_MIN_LINES = 14;
 
-function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; streaming?: boolean }) {
+// Language → file extension for downloads when the fence carries no filename.
+const LANG_EXT: Record<string, string> = {
+  rust: "rs", python: "py", javascript: "js", typescript: "ts", bash: "sh",
+  shell: "sh", yaml: "yml", markdown: "md", plaintext: "txt", "c++": "cpp",
+  csharp: "cs", golang: "go", dockerfile: "dockerfile",
+};
+
+// Fence info conventions seen in LLM output: ```rust main.rs, ```rust:main.rs,
+// ```main.rs, ```Cargo.toml — extract the filename if present.
+const FILENAME_TOKEN = /^[\w+.-]+\.[A-Za-z][A-Za-z0-9]*$/;
+
+export function parseFence(
+  className: string | undefined,
+  meta: unknown,
+): { lang?: string; filename?: string } {
+  const raw = (className ?? "").replace(/^language-/, "");
+  const tokens = [...raw.split(/[\s:]+/), ...String(meta ?? "").split(/\s+/)].filter(Boolean);
+  let lang: string | undefined;
+  let filename: string | undefined;
+  const looksLikeFilename = (t: string) =>
+    FILENAME_TOKEN.test(t) && !hljs.getLanguage(t);
+  const base = (t: string) => t.split(/[/\\]/).pop() ?? t;
+  tokens.forEach((t, i) => {
+    if (looksLikeFilename(t)) {
+      if (!filename) {
+        filename = base(t).replace(/^["']|["']$/g, "");
+        if (i === 0 && !lang) {
+          const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
+          if (hljs.getLanguage(ext)) lang = ext;
+        }
+      }
+    } else if (i === 0 && !lang) {
+      lang = t;
+    }
+  });
+  return { lang, filename };
+}
+
+function CodeBlock({
+  code,
+  lang,
+  filename,
+  streaming,
+}: {
+  code: string;
+  lang?: string;
+  filename?: string;
+  streaming?: boolean;
+}) {
   const html = useMemo(() => {
     try {
       return lang && hljs.getLanguage(lang)
@@ -40,13 +88,14 @@ function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; str
     !!lang && STRUCT_LANGS.has(lang.toLowerCase()) && code.split("\n").length > COLLAPSE_MIN_LINES;
   const open = userOpen ?? !(collapsible && !streaming);
   const lineCount = code.split("\n").length;
+  const label = filename ?? lang ?? "text";
 
   const download = () => {
     const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `halotalk-${lang ?? "text"}.${lang ?? "txt"}`;
+    a.download = filename ?? `halotalk-${lang ?? "text"}.${LANG_EXT[lang ?? ""] ?? lang ?? "txt"}`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -54,20 +103,16 @@ function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; str
   return (
     <div className="codeblock">
       <div className="codeblock-head">
-        {collapsible ? (
-          <button
-            data-testid="code-collapse"
-            className="flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-surface"
-            aria-expanded={open}
-            onClick={() => setUserOpen(!open)}
-          >
-            <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
-            {lang}
-            {!open && <span className="text-[0.7rem] text-muted">· {lineCount} lines</span>}
-          </button>
-        ) : (
-          <span>{lang ?? "text"}</span>
-        )}
+        <button
+          data-testid="code-collapse"
+          className="flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors hover:bg-surface"
+          aria-expanded={open}
+          onClick={() => setUserOpen(!open)}
+        >
+          <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
+          {label}
+          {!open && <span className="text-[0.7rem] text-muted">· {lineCount} lines</span>}
+        </button>
         <span className="ml-auto flex items-center gap-1">
           <button
             data-testid="code-download"
@@ -175,14 +220,17 @@ export default function Markdown({ children, streaming }: { children: string; st
           // react-markdown 9 hands sanitized `node` snapshots with stripped
           // names/properties, so lang is read from the `code` component props.
           pre: ({ children }) => <>{children}</>,
-          code: ({ className, children }) => {
-            const lang = /language-([\w-]+)/.exec(className ?? "")?.[1];
+          code: ({ className, node, children }) => {
+            const { lang, filename } = parseFence(
+              className,
+              (node as unknown as { data?: { meta?: string } })?.data?.meta,
+            );
             const raw = String(children ?? "");
             if (!className && !raw.includes("\n"))
               return <code className={className}>{children}</code>;
             const code = raw.replace(/\n$/, "");
             if (lang === "mermaid") return <MermaidBlock code={code} />;
-            return <CodeBlock code={code} lang={lang} streaming={streaming} />;
+            return <CodeBlock code={code} lang={lang} filename={filename} streaming={streaming} />;
           },
           a: ({ href, children: kids }) => (
             <a href={href} target="_blank" rel="noreferrer">
