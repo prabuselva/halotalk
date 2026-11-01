@@ -530,3 +530,6 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   mock_llm.py: JSONBLOCK trigger (28-line fenced json reply) for code-block e2e — mock restarted.
   e2e 6→9 (theme persistence, tick lifecycle, collapse + download); Playwright 9/9, build clean,
   sweep ALL GREEN. 6 stale pw-* chats purged from bob.
+  FOLLOW-UP: halotalk is now a git repo — baseline commit 10657fa on `main` (64 files;
+  .gitignore extended with /dist/, web/test-results/, web/playwright-report/). The placeholder
+  commit identity must be replaced by the user's real git config for future commits.
