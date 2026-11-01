@@ -1,0 +1,187 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "22"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from tag or input
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Error: Version must be vX.Y.Z or vX.Y.Z-rc.N (e.g., v0.1.0)"
+            exit 1
+          fi
+          echo "Valid version: $VERSION"
+
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web client (embedded by rust-embed at compile time)
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+  build-and-release:
+    name: ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.os }}
+    needs: [prepare, lint-and-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: halotalk-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            asset_name: halotalk-linux-arm64
+            cross_pkgs: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            asset_name: halotalk-linux-armv7
+            cross_pkgs: gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+            linker: arm-linux-gnueabihf-gcc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: halotalk-macos-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset_name: halotalk-macos-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: halotalk-windows-amd64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compiler toolchain
+        if: matrix.cross_pkgs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cross_pkgs }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web client (embedded by rust-embed at compile time)
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Build release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.linker }}
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: ${{ matrix.linker }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Create release archive
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          BIN=halotalk${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          SRC="target/${{ matrix.target }}/release/$BIN"
+          test -f "$SRC" || { echo "ERROR: binary not found at $SRC"; exit 1; }
+          mkdir -p release
+          cp "$SRC" release/
+          cp README.md release/ 2>/dev/null || true
+          cd release
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            7z a -tzip "../${{ matrix.asset_name }}-${VERSION}.zip" .
+          else
+            tar -czf "../${{ matrix.asset_name }}-${VERSION}.tar.gz" .
+          fi
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset_name }}-${{ needs.prepare.outputs.version }}.*
+          tag_name: ${{ needs.prepare.outputs.version }}
+          name: HaloTalk ${{ needs.prepare.outputs.version }}
+          body: |
+            Self-contained HaloTalk release: single binary with embedded web client,
+            bundled SQLite, rustls TLS. `data/`, `uploads/` are created on first run
+            in the working directory (override the port with `HALO_PORT`).
+
+            ```bash
+            # Linux/macOS
+            tar -xzf halotalk-<os>-<arch>-${{ needs.prepare.outputs.version }}.tar.gz
+            ./halotalk
+
+            # Windows
+            # unzip halotalk-windows-amd64-${{ needs.prepare.outputs.version }}.zip and run halotalk.exe
+            ```
+          draft: false
+          prerelease: ${{ contains(needs.prepare.outputs.version, '-rc.') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
