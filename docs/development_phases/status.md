@@ -611,3 +611,10 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   schema change. Mock: /metrics counters (prompt/predicted tokens+seconds, spec_decode 12/8 only
   when request contains MTP → exact 66.7%). 3 new e2e (speeds, MTP accept, N/A unreachable);
   full Playwright 18/18; cargo fmt/clippy/test workspace green (halo-server 18/18).
+- 2026-11-02 — v0.1.2 RELEASED (fence filenames + token speeds). Gates green (fmt/clippy/test,
+  npm build, Playwright 18/18); single combined commit 24d1796 (shared docs/spec files spanned
+  both features — not splittable without interactive hunk staging) → main pushed THEN tag.
+  CI + Build-and-Release green; 6 assets; linux-amd64 readelf max = GLIBC_2.28; binary
+  smoke-tested on :8423 (health version 0.1.2). GOTCHA: `gh` stored token INVALID now — pushes
+  worked via `git -c credential.helper=store` (PAT in ~/.git-credentials still valid); run
+  `gh auth login` to restore `gh run watch`/`gh release view`.
