@@ -1,0 +1,342 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+}
+
+:root,
+[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --border: #e5e7eb;
+  --text: #1a1d21;
+  --muted: #6b7280;
+  --accent: #6d5ce7;
+  --accent-strong: #5a49d6;
+  --accent-soft: #eceafd;
+  --danger: #dc2626;
+  --code-bg: #f6f7f9;
+  --hl-keyword: #8250df;
+  --hl-string: #0a7d33;
+  --hl-number: #b35900;
+  --hl-func: #2563eb;
+  --hl-comment: #8a919c;
+  --hl-type: #b02898;
+  --hl-attr: #953800;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0e1013;
+  --surface: #171a1f;
+  --surface-2: #1e222a;
+  --border: #262b33;
+  --text: #e6e9ef;
+  --muted: #98a2b3;
+  --accent: #8b7cf2;
+  --accent-strong: #a396ff;
+  --accent-soft: #232043;
+  --danger: #f87171;
+  --code-bg: #12151a;
+  --hl-keyword: #c792ea;
+  --hl-string: #7fd69a;
+  --hl-number: #f0b36b;
+  --hl-func: #7aa7ff;
+  --hl-comment: #6c7585;
+  --hl-type: #e28ed4;
+  --hl-attr: #e0a36b;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+}
+
+* {
+  border-color: var(--border);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+/* ---------------------------------------------------------- markdown */
+.md {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.5em 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 600;
+  margin: 1.1em 0 0.45em;
+  line-height: 1.3;
+}
+.md h1 {
+  font-size: 1.25rem;
+}
+.md h2 {
+  font-size: 1.1rem;
+}
+.md h3 {
+  font-size: 1rem;
+}
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.2em 0;
+}
+.md li::marker {
+  color: var(--muted);
+}
+.md a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.4em 0.9em;
+  margin: 0.6em 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text);
+}
+.md code:not(pre code) {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+  font-size: 0.82em;
+  font-family: var(--font-mono);
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.7em 0;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 0.35em 0.7em;
+  text-align: left;
+}
+.md th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.md tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+.md .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15em 0;
+}
+.mermaid-box {
+  margin: 0.7em 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.mermaid-error {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0.3em 0;
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+/* code blocks */
+.codeblock {
+  margin: 0.7em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--code-bg);
+}
+.codeblock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3em 0.75em;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.codeblock pre {
+  margin: 0;
+  padding: 0.8em 0.9em;
+  overflow-x: auto;
+}
+.codeblock code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* syntax tokens (theme-aware) */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: var(--hl-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--hl-string);
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--hl-number);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--hl-func);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--hl-type);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--hl-attr);
+}
+.hljs-meta,
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+/* streaming caret */
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.drawer-in {
+  animation: drawer 150ms ease-out;
+}
+@keyframes drawer {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* form controls */
+.input,
+.select,
+.textarea {
+  @apply w-full rounded-md border bg-surface px-2.5 py-1.5 text-sm outline-none;
+  border-color: var(--border);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}

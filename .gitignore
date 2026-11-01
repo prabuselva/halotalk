@@ -1,0 +1,20 @@
+# Rust
+/target
+
+# Node / Vite
+node_modules/
+web/dist/
+
+# Runtime data (DB, uploads)
+data/
+
+# Misc
+*.log
+.DS_Store
+
+# Release artifacts (scripts/build-multiarch.sh)
+/dist/
+
+# Playwright output
+web/test-results/
+web/playwright-report/

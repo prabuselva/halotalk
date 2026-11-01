@@ -1,0 +1,30 @@
+[package]
+name = "halo-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "halotalk"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+argon2 = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+halo-core = { workspace = true }
+halo-providers = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+mime_guess = { workspace = true }
+rust-embed = { workspace = true }
+tower-http = { workspace = true, features = ["cors", "fs", "limit", "trace"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }

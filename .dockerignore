@@ -1,0 +1,8 @@
+target/
+data/
+docs/
+scripts/
+web/node_modules/
+web/dist/
+**/*.log
+.git/
