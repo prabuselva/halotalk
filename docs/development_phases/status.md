@@ -533,3 +533,41 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   FOLLOW-UP: halotalk is now a git repo — baseline commit 10657fa on `main` (64 files;
   .gitignore extended with /dist/, web/test-results/, web/playwright-report/). The placeholder
   commit identity must be replaced by the user's real git config for future commits.
+- 2026-11-01 — AUTH UX + RECOVERY GROUNDWORK: (1) ROOT-CAUSE FIX — rest.ts threw the message as a
+  bare STRING (`throw await errorMessage(res)`) while every UI caller reads `(err as Error).message`
+  → undefined; ALL server errors rendered blank (login failures, signup errors, …). Now throws
+  Error; every `.message` consumer shows the real reason. (2) users gain recovery_question +
+  recovery_answer_hash (additive ALTERs; users created before this have '' → the future forgot-
+  password flow must re-prompt them, including the admin). signup/setup require both; answer is
+  trim+lowercase, argon2-hashed (verify_password on the normalized form only), never serialized;
+  User::public() exposes has_recovery; Store::get_recovery() fetches question+hash for reset.
+  (3) AuthGate: 2-step wizard (credentials → preset recovery questions or custom + answer +
+  confirm), per-field inline errors on blur/submit (client-side username/password rules mirror
+  the server), server errors mapped back to the offending field/step ("already taken" bounces to
+  step 1), generic alert box fallback; login shows inline alert on 401; "Forgot password?" is a
+  coming-soon hint, no endpoint yet. New web/e2e/auth.spec.ts (wizard+auto-login, blank-field
+  errors, taken-username bounce, wrong-password alert) — needs open_signup=1 (already the dev
+  state; specs fail loudly otherwise, bob is NOT admin so the toggle is not exercised). Unit test
+  recovery_answer_roundtrip_and_normalization in routes.rs (normalization contract). cargo
+  fmt/clippy/test clean (17), npm build clean, Playwright 13/13, sweep ALL GREEN. Server restarted
+  (ALTERs live). NOTE: a write-tool slip truncated rest.ts mid-session; restored from git
+  baseline and re-applied the delta — no content lost.
+- 2026-11-01 — CI RELEASE WORKFLOW: `.github/workflows/release.yml` added, modeled on the user's
+  ~/git/memos-rs release pipeline (prepare → lint-and-test → 6-target matrix → per-matrix
+  softprops/action-gh-release upload). Targets: linux amd64/arm64/armv7 (apt cross gcc + cargo
+  linker env), macOS arm64/amd64, windows amd64. Works out of the box because the stack is
+  rustls (no OpenSSL), sqlx sqlite-bundled, and the web client is rust-embed'd — each job runs
+  `npm ci && npm run build` in web/ before `cargo build --release --target` (embed reads
+  web/dist at compile time). Archives: tar.gz (unix) / zip via 7z (windows), README bundled,
+  asset name halotalk-<os>-<arch>-<version>. Triggers: push of v* tag or manual dispatch;
+  -rc.N versions publish as prereleases. Local gates: YAML parses; native release build passes
+  (46s); release binary smoke-tested from a clean cwd on :8421 (health ok, needs_setup=true,
+  embedded index served, data/ created on first run — HALO_PORT honored). NOT yet run on GitHub:
+  repo has no remote configured; user must push + create a tag to fire it. podman
+  scripts/build-multiarch.sh remains the local (pre-CI) path.
+- 2026-11-01 — VERSION IN UI (pre-release request). Single source stays Cargo.toml workspace
+  `version = "0.1.0"`; /api/health already returned it — now exposed: types.ts Health,
+  rest.health(), version badge (`data-testid="app-version"`, renders `v{version}`, blank on fetch
+  failure) in AuthGate h1 (visible before login) and Sidebar user footer (after login). Playwright
+  test `version shows on the auth screen and sidebar` asserts both vs /api/health. Docs synced
+  (01-architecture health row, 3.1 checkbox). Tagging v0.1.0 to fire release.yml.

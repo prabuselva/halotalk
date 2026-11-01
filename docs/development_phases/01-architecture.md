@@ -43,10 +43,10 @@ Settings travel with each chat (`chats` row) so per-chat model config "just work
 ## API (all JSON under /api; SSE for chat)
 | Method | Path | Purpose |
 |---|---|---|
-| GET | /api/health | liveness |
+| GET | /api/health | liveness `{ok, app, version}` (public; UI shows `version` on AuthGate + sidebar footer) |
 | GET | /api/auth/status | `{needs_setup, open_signup}` (public, used by AuthGate) |
-| POST | /api/auth/setup | first-run admin `{username, password}` → session cookie; adopts legacy rows |
-| POST | /api/auth/signup | register when `open_signup` on → session cookie |
+| POST | /api/auth/setup | first-run admin `{username, password, recovery_question, recovery_answer}` → session cookie; adopts legacy rows |
+| POST | /api/auth/signup | register when `open_signup` on; recovery question required (answer stored argon2-normalized, never serialized) → session cookie |
 | POST | /api/auth/login / /logout | `{username, password}` → cookie / clears session (204) |
 | GET | /api/auth/me | current user `{id, username, is_admin}` |
 | PATCH | /api/auth/open-signup | admin-only `{open_signup: bool}` |

@@ -858,15 +858,20 @@ impl Store {
         username: &str,
         pass_hash: &str,
         is_admin: bool,
+        recovery_question: &str,
+        recovery_answer_hash: &str,
     ) -> Result<User> {
         let id = Uuid::now_v7().to_string();
         sqlx::query(
-            "INSERT INTO users (id, username, pass_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (id, username, pass_hash, is_admin, recovery_question, recovery_answer_hash, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(username)
         .bind(pass_hash)
         .bind(is_admin)
+        .bind(recovery_question)
+        .bind(recovery_answer_hash)
         .bind(Utc::now())
         .execute(&self.pool)
         .await?;
@@ -877,7 +882,7 @@ impl Store {
 
     pub async fn get_user_by_name(&self, username: &str) -> Result<Option<User>> {
         Ok(sqlx::query_as::<_, User>(
-            "SELECT id, username, pass_hash, is_admin, created_at FROM users WHERE username = ?",
+            "SELECT id, username, pass_hash, is_admin, recovery_question, created_at FROM users WHERE username = ?",
         )
         .bind(username)
         .fetch_optional(&self.pool)
@@ -886,9 +891,19 @@ impl Store {
 
     pub async fn get_user(&self, id: &str) -> Result<Option<User>> {
         Ok(sqlx::query_as::<_, User>(
-            "SELECT id, username, pass_hash, is_admin, created_at FROM users WHERE id = ?",
+            "SELECT id, username, pass_hash, is_admin, recovery_question, created_at FROM users WHERE id = ?",
         )
         .bind(id)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    /// Recovery credentials for the forgot-password flow (question + argon2 hash).
+    pub async fn get_recovery(&self, username: &str) -> Result<Option<(String, String)>> {
+        Ok(sqlx::query_as::<_, (String, String)>(
+            "SELECT recovery_question, recovery_answer_hash FROM users WHERE username = ?",
+        )
+        .bind(username)
         .fetch_optional(&self.pool)
         .await?)
     }

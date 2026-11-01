@@ -107,6 +107,7 @@ pub struct User {
     #[serde(skip_serializing)]
     pub pass_hash: String,
     pub is_admin: bool,
+    pub recovery_question: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -116,6 +117,7 @@ impl User {
             "id": self.id,
             "username": self.username,
             "is_admin": self.is_admin,
+            "has_recovery": !self.recovery_question.is_empty(),
         })
     }
 }

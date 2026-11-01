@@ -97,6 +97,13 @@ export default function Sidebar({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [archOpen, setArchOpen] = useState(false);
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    rest
+      .health()
+      .then((h) => setVersion(h.version))
+      .catch(() => setVersion(""));
+  }, []);
   const groups = useMemo(
     () => groupChats(query.trim() ? chats.filter((c) => matchesQuery(c, query)) : chats),
     [chats, query],
@@ -341,6 +348,11 @@ export default function Sidebar({
             {user.username}
             {user.is_admin && <span className="ml-1 text-[0.65rem] text-muted">· admin</span>}
           </span>
+          {version && (
+            <span data-testid="app-version" className="shrink-0 text-[0.65rem] text-muted">
+              v{version}
+            </span>
+          )}
           <button
             onClick={onLogout}
             className="rounded-md px-2 py-1 text-[0.7rem] text-muted transition-colors hover:bg-surface-2 hover:text-ink"

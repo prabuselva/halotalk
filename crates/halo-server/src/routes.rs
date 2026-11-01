@@ -265,6 +265,10 @@ async fn health() -> impl IntoResponse {
 struct Credentials {
     username: String,
     password: String,
+    #[serde(default)]
+    recovery_question: Option<String>,
+    #[serde(default)]
+    recovery_answer: Option<String>,
 }
 
 /// Lowercase `[a-z0-9._-]` usernames, 3–32 chars. None = invalid.
@@ -323,12 +327,42 @@ async fn register_user(
             "password must be at least 8 characters",
         ));
     }
+    let question = creds
+        .recovery_question
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if question.is_empty() {
+        return Err(ApiError::bad_request("recovery question is required"));
+    }
+    if question.chars().count() > 200 {
+        return Err(ApiError::bad_request(
+            "recovery question must be at most 200 characters",
+        ));
+    }
+    let answer = creds
+        .recovery_answer
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_lowercase();
+    if answer.chars().count() < 3 {
+        return Err(ApiError::bad_request(
+            "recovery answer must be at least 3 characters",
+        ));
+    }
     if state.store.get_user_by_name(&username).await?.is_some() {
         return Err(ApiError::bad_request("username already taken"));
     }
     let hash = auth::hash_password(&creds.password)
         .map_err(|e| ApiError::internal(format!("hash: {e}")))?;
-    let user = state.store.create_user(&username, &hash, as_admin).await?;
+    let answer_hash =
+        auth::hash_password(&answer).map_err(|e| ApiError::internal(format!("hash: {e}")))?;
+    let user = state
+        .store
+        .create_user(&username, &hash, as_admin, &question, &answer_hash)
+        .await?;
     if as_admin {
         state.store.assign_legacy_rows(&user.id).await?;
     }
@@ -2314,6 +2348,38 @@ mod cap_tests {
             "reasoning": true
         });
         assert_eq!(detect_caps(&m), Some((false, true, None)));
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::auth;
+    use halo_core::db::init_pool;
+    use halo_core::store::Store;
+
+    #[tokio::test]
+    async fn recovery_answer_roundtrip_and_normalization() {
+        let dir = std::env::temp_dir().join(format!("halotalk-rec-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::new(init_pool(&dir.join("t.db")).await.unwrap());
+        let hash = auth::hash_password("password123").unwrap();
+        let answer = "  SnowBall ".trim().to_lowercase();
+        let ahash = auth::hash_password(&answer).unwrap();
+        let user = store
+            .create_user("rec_user", &hash, false, "First pet?", &ahash)
+            .await
+            .unwrap();
+        assert_eq!(user.recovery_question, "First pet?");
+        assert_eq!(user.public()["has_recovery"], true);
+        let (q, h) = store.get_recovery("rec_user").await.unwrap().unwrap();
+        assert_eq!(q, "First pet?");
+        assert!(auth::verify_password(
+            &h,
+            &" SnowBall ".trim().to_lowercase()
+        ));
+        assert!(!auth::verify_password(&h, "SnowBall"));
+        assert!(!auth::verify_password(&h, "snowbo"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
 

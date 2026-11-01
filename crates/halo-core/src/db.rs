@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL UNIQUE,
     pass_hash TEXT NOT NULL,
     is_admin INTEGER NOT NULL DEFAULT 0,
+    recovery_question TEXT NOT NULL DEFAULT '',
+    recovery_answer_hash TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -133,6 +135,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE messages ADD COLUMN tool_call_id TEXT",
     "ALTER TABLE chats ADD COLUMN kb_enabled INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE messages ADD COLUMN sources TEXT",
+    "ALTER TABLE users ADD COLUMN recovery_question TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN recovery_answer_hash TEXT NOT NULL DEFAULT ''",
 ];
 
 pub async fn init_pool(path: &Path) -> Result<SqlitePool> {

@@ -1,6 +1,7 @@
 import type {
   AuthStatus,
   Chat,
+  Health,
   KbDocEntry,
   Message,
   ModelInfo,
@@ -8,6 +9,7 @@ import type {
   Prompt,
   Provider,
   ProviderTestResult,
+  Recovery,
   RegistryEntry,
   SearchHit,
   User,
@@ -30,7 +32,7 @@ async function errorMessage(res: Response): Promise<string> {
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (res.status === 401 && !path.startsWith("/api/auth/")) unauthorized();
-  if (!res.ok) throw await errorMessage(res);
+  if (!res.ok) throw new Error(await errorMessage(res));
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -49,11 +51,13 @@ const patch = <T,>(path: string, body: unknown) =>
   });
 
 export const rest = {
+  health: () => req<Health>("/api/health"),
   authStatus: () => req<AuthStatus>("/api/auth/status"),
   me: () => req<User>("/api/auth/me"),
-  setup: (username: string, password: string) => post<User>("/api/auth/setup", { username, password }),
-  signup: (username: string, password: string) =>
-    post<User>("/api/auth/signup", { username, password }),
+  setup: (username: string, password: string, recovery: Recovery) =>
+    post<User>("/api/auth/setup", { username, password, ...recovery }),
+  signup: (username: string, password: string, recovery: Recovery) =>
+    post<User>("/api/auth/signup", { username, password, ...recovery }),
   login: (username: string, password: string) => post<User>("/api/auth/login", { username, password }),
   logout: () => req<void>("/api/auth/logout", { method: "POST" }),
   setOpenSignup: (open: boolean) =>
@@ -153,7 +157,7 @@ export const rest = {
       body: JSON.stringify({ text }),
     });
     if (res.status === 401) unauthorized();
-    if (!res.ok) throw await errorMessage(res);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.blob();
   },
   transcribe: async (blob: Blob, filename = "speech.webm"): Promise<string> => {
@@ -161,7 +165,7 @@ export const rest = {
     form.append("file", blob, filename);
     const res = await fetch("/api/audio/transcribe", { method: "POST", body: form });
     if (res.status === 401) unauthorized();
-    if (!res.ok) throw await errorMessage(res);
+    if (!res.ok) throw new Error(await errorMessage(res));
     const j = (await res.json()) as { text?: string };
     return j.text ?? "";
   },

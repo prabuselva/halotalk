@@ -45,6 +45,17 @@ export interface User {
   is_admin: boolean;
 }
 
+export interface Recovery {
+  recovery_question: string;
+  recovery_answer: string;
+}
+
+export interface Health {
+  app: string;
+  ok: boolean;
+  version: string;
+}
+
 export interface AuthStatus {
   needs_setup: boolean;
   open_signup: boolean;

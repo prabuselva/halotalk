@@ -6,6 +6,9 @@ Goal: make HaloTalk safe to share beyond localhost and pleasant for daily use.
 - [x] Sessions: argon2 password hashing, self-rolled cookie sessions (`halo_session`, sha256-hashed
       64-hex tokens, 30-day sliding), `users`/`sessions` tables.
 - [x] First-run setup screen creates admin; open-signup toggle in settings (admin-only; default off).
+  Signup/setup are 2-step wizards collecting a recovery question + answer (stored as normalized
+  argon2 hash — groundwork for forgot-password reset; existing users have none and must set one
+  when the reset flow lands).
 - [x] Ownership columns (`user_id`) + row filtering in every query (cross-user access → 404;
       legacy rows assigned to the first admin at setup).
 - [x] API keys encrypted at rest (ChaCha20-Poly1305 `xc1:` ciphertext — originally fernet, migrated

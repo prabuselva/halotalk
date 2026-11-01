@@ -17,6 +17,8 @@
       download-as-file button.
 - [x] Responsive reading column (max-w-3xl → xl:4xl → 2xl:5xl) + textarea auto-grow scaled to
       viewport (35% of innerHeight, 140–420px, `max-h-[40vh]`).
+- [x] App version badge from `/api/health` (`data-testid="app-version"`) on the AuthGate logo card
+      (works pre-login) and the sidebar user footer; empty on fetch failure (no broken layout).
 
 ## 3.2 Capabilities
 - [x] Tool/function calling pass-through + built-in web search tool (opt-in per chat
@@ -43,6 +45,9 @@
 - [x] Multi-arch linux release binaries (x86_64/aarch64/armv7, rustls + bundled sqlite,
       `scripts/build-multiarch.sh` via podman, SHA256SUMS under dist/release/; file-verified,
       x86_64 release e2e green; glibc ≥ 2.38 hosts; no qemu → arm run-smoke documented skip).
+- [x] GitHub release workflow (`.github/workflows/release.yml`, on v* tag / manual dispatch):
+      6-target matrix — linux amd64/arm64/armv7, macOS arm64/amd64, windows amd64 — embedding
+      the web build like memos-rs; native + smoke verified locally, runs on push to GitHub.
 - [x] Benchmarks: first-token latency & tokens/s shown in header while streaming (browser-verified).
 - [x] Playwright e2e smoke (chat round-trip against mock SSE server): `npm run test:e2e
       --prefix web` — login → send → streamed reply + perf badge; caught+fixed a P0
