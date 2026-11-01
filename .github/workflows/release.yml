@@ -7,13 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g., v0.1.0)"
+        description: "Release version (e.g., v0.1.1)"
         required: true
-        default: "v0.1.0"
+        default: "v0.1.1"
 
 env:
   CARGO_TERM_COLOR: always
   NODE_VERSION: "22"
+  # Minimum glibc for linux assets (Ubuntu 18.04 / Debian 10 / RHEL 8 era).
+  # Ubuntu-runner cross gcc ships glibc 2.39 and marks binaries GLIBC_2.38+,
+  # breaking older devices; zig cc enforces this floor at link time.
+  GLIBC_FLOOR: "2.28"
 
 permissions:
   contents: write
@@ -95,13 +99,9 @@ jobs:
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             asset_name: halotalk-linux-arm64
-            cross_pkgs: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-            linker: aarch64-linux-gnu-gcc
           - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             asset_name: halotalk-linux-armv7
-            cross_pkgs: gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
-            linker: arm-linux-gnueabihf-gcc
           - os: macos-latest
             target: aarch64-apple-darwin
             asset_name: halotalk-macos-arm64
@@ -121,11 +121,14 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compiler toolchain
-        if: matrix.cross_pkgs
+      - name: Install Zig toolchain (glibc-floor linux linking)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.cross_pkgs }}
+          curl -sfL https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz -o /tmp/zig.tar.xz
+          sudo mkdir -p /opt/zigbuild
+          sudo tar -xf /tmp/zig.tar.xz -C /opt/zigbuild
+          echo "/opt/zigbuild/zig-x86_64-linux-0.14.1" >> "$GITHUB_PATH"
+          cargo install cargo-zigbuild --locked
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -139,10 +142,15 @@ jobs:
         run: npm ci && npm run build
 
       - name: Build release binary
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.linker }}
-          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: ${{ matrix.linker }}
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            # cargo-zigbuild links with zig cc; the ".2.28" target suffix caps
+            # glibc symbol versions so binaries run on old armhf/x86_64 hosts.
+            cargo zigbuild --release --target "${{ matrix.target }}.${{ env.GLIBC_FLOOR }}"
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       - name: Create release archive
         env:

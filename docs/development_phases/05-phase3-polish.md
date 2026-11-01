@@ -44,9 +44,12 @@
       pasta, /api/health, embedded UI, `(healthy)`; HEALTHCHECK requires `--format docker`).
 - [x] Multi-arch linux release binaries (x86_64/aarch64/armv7, rustls + bundled sqlite,
       `scripts/build-multiarch.sh` via podman, SHA256SUMS under dist/release/; file-verified,
-      x86_64 release e2e green; glibc ≥ 2.38 hosts; no qemu → arm run-smoke documented skip).
+      x86_64 release e2e green). Glibc floor: v0.1.0 CI assets accidentally required GLIBC_2.38
+      (runner cross gcc) → fixed via cargo-zigbuild `.2.28` floor (see release workflow);
+      no qemu → arm run-smoke documented skip.
 - [x] GitHub release workflow (`.github/workflows/release.yml`, on v* tag / manual dispatch):
-      6-target matrix — linux amd64/arm64/armv7, macOS arm64/amd64, windows amd64 — embedding
+      6-target matrix — linux amd64/arm64/armv7 via zigbuild GLIBC_FLOOR=2.28 (runs on
+      armv7-class devices; readelf-verified), macOS arm64/amd64, windows amd64 — embedding
       the web build like memos-rs; native + smoke verified locally, runs on push to GitHub.
 - [x] Benchmarks: first-token latency & tokens/s shown in header while streaming (browser-verified).
 - [x] Playwright e2e smoke (chat round-trip against mock SSE server): `npm run test:e2e

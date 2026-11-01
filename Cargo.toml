@@ -3,9 +3,9 @@ resolver = "2"
 members = ["crates/halo-core", "crates/halo-providers", "crates/halo-server"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
-license = "MIT"
+license = "GPL-3.0-only"
 
 [workspace.dependencies]
 anyhow = "1"

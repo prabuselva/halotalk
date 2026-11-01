@@ -66,7 +66,35 @@ npm run build --prefix web
 5. Tick phase doc + status.md (+ ledger log line). Move to next item immediately.
 
 ## Multi-arch deliverable (3.3c, hard requirement)
-`scripts/build-multiarch.sh` (podman-driven): linux x86_64 / aarch64 / armv7 (arm32) release
-binaries, web embedded. Needs pure/cross-compilable deps: bundled SQLite and rustls (audit
-Cargo.toml features; switch away from system-sqlite/native-tls if needed and re-verify FTS5).
-Artifacts + SHA256SUMS under `dist/release/`.
+CI is the primary path (see Release & versioning flow); `scripts/build-multiarch.sh` (podman)
+remains the local fallback. Artifacts + SHA256SUMS under `dist/release/`. Needs
+pure/cross-compilable deps: bundled SQLite and rustls (audit Cargo.toml features; switch away
+from system-sqlite/native-tls if needed and re-verify FTS5).
+
+## Release & versioning flow (v0.1.0 shipped 2026-11-01 — repeat this)
+- Version single source: `Cargo.toml` `[workspace.package] version`. Surface changes through
+  `/api/health` → `rest.health()` → `app-version` badges (AuthGate + sidebar); never hardcode
+  version strings in code/docs beyond the tag.
+- Remote `origin` = https://github.com/prabuselva/halotalk.git, default branch `main`.
+- Release steps: (1) bump `Cargo.toml` version, (2) run all local gates (cargo fmt/clippy -D/
+  test, `npm run build`, full Playwright suite, regression sweep), (3) commit, (4) annotated
+  `git tag -a vX.Y.Z`, (5) `git push origin main` THEN `git push origin vX.Y.Z`.
+- `release.yml` (`.github/`): fires on `v*` tag push (or `workflow_dispatch`) → lint+test →
+  6-target matrix (linux amd64/arm64/armv7, macOS arm64/amd64, windows amd64) → publishes the
+  GitHub Release with `halotalk-<os>-<arch>-<version>` archives. Versions matching `-rc.`
+  publish as prereleases. Each job runs web `npm ci && npm run build` before
+  `cargo build --release` (rust-embed reads `web/dist` at compile time).
+- Linux jobs link via `cargo zigbuild --target <triple>.$GLIBC_FLOOR` (workflow env
+  `GLIBC_FLOOR: "2.28"`): ubuntu-runner cross gcc ships glibc 2.39 and stamped v0.1.0 assets
+  with `GLIBC_2.38`, breaking older/armhf devices. Verify shipped assets with
+  `readelf -V halotalk | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -1` → must be ≤ 2.28.
+  zig 0.14.1 + cargo-zigbuild installed inside the job; local test: same zigbuild command.
+- GOTCHA: a tag only triggers workflows if the workflow file already exists on the REMOTE
+  default branch — push `main` before pushing the tag, else the run is silently skipped. Fix =
+  delete + recreate tag at the commit that contains the workflows.
+- Watch with `gh run watch <id> --exit-status`; verify with `gh release view vX.Y.Z`.
+- Commits so far use placeholder identity `HaloTalk Dev <dev@halotalk.local>` (no global git
+  identity configured) — ask the user for their real name/email when it matters.
+- License is GPL-3.0 (`LICENSE` = GPL-3.0 text, `Cargo.toml` = `GPL-3.0-only` — user decision
+  2026-11-01). Keep any new crate metadata inheriting `license.workspace`.
+

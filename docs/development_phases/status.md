@@ -571,3 +571,20 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   failure) in AuthGate h1 (visible before login) and Sidebar user footer (after login). Playwright
   test `version shows on the auth screen and sidebar` asserts both vs /api/health. Docs synced
   (01-architecture health row, 3.1 checkbox). Tagging v0.1.0 to fire release.yml.
+- 2026-11-01 — v0.1.0 SHIPPED on GitHub + flow documented in AGENTS.md ("Release & versioning
+  flow"). Push hurdles hit & fixed: (1) GitHub repo pre-had unrelated scaffold commit with
+  GPL-3.0 LICENSE → merged --allow-unrelated-histories (7092a74), LICENSE kept; (2) first tag
+  push fired NOTHING — GitHub ignores tag events when the workflow file is absent from the
+  REMOTE default branch at push time; fixed by deleting+recreating v0.1.0 at 7092a74 and
+  pushing main first. Result: CI green; Build-and-Release all 6 matrix jobs green (~5 min/job);
+  Release v0.1.0 published (stable) with 6 archives, linux amd64 9.0 MB. RESOLVED: license is
+  GPL-3.0 (user decision) — root LICENSE stays, Cargo.toml `license` fixed MIT → GPL-3.0-only.
+- 2026-11-01 — GLIBC FLOOR FIX for linux assets (user hit `GLIBC_2.38 not found` on armv7).
+  Root cause: ubuntu-latest cross gcc (gcc-*-linux-gnu pkgs) ships glibc 2.39; linked binaries
+  (incl. bundled sqlite / aws-lc / ring C) stamped up to GLIBC_2.38 — readelf confirmed on the
+  RELEASED armv7 AND amd64 assets. Fix: linux matrix jobs now `cargo zigbuild --release
+  --target <triple>.${GLIBC_FLOOR=2.28}` (zig 0.14.1 tarball + `cargo install cargo-zigbuild`
+  in-job); apt cross_pkgs/linker removed. Locally verified all three linux targets: builds OK
+  (aws-lc assembles under zig cc), readelf max = GLIBC_2.28 each, x86_64 zig binary smoke-tested
+  on :8423 (health ok). v0.1.1 tagged; v0.1.0 linux assets superseded (still downloadable —
+  consider deleting the v0.1.0 release).
