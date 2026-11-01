@@ -586,5 +586,5 @@ setsid ./target/debug/halotalk </dev/null > /tmp/opencode/halotalk.log 2>&1 &
   --target <triple>.${GLIBC_FLOOR=2.28}` (zig 0.14.1 tarball + `cargo install cargo-zigbuild`
   in-job); apt cross_pkgs/linker removed. Locally verified all three linux targets: builds OK
   (aws-lc assembles under zig cc), readelf max = GLIBC_2.28 each, x86_64 zig binary smoke-tested
-  on :8423 (health ok). v0.1.1 tagged; v0.1.0 linux assets superseded (still downloadable —
-  consider deleting the v0.1.0 release).
+  on :8423 (health ok). v0.1.1 tagged; v0.1.0 release+tag DELETED per user (broken linux assets;
+  v0.1.1 is the only published release).
